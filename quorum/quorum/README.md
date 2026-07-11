@@ -1,4 +1,4 @@
-# Quorum — a multi-agent deliberation engine
+# Quorum — a multi-agent deliberation engine..
 
 > Put a hard decision before a council of AI advisors. They argue it from
 > multiple lenses; a Synthesizer weighs them with a transparent decision matrix
