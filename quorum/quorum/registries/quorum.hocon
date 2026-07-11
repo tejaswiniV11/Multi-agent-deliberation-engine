@@ -1,0 +1,289 @@
+# =============================================================================
+#  QUORUM  \u2014  a multi-agent deliberation engine for hard decisions
+# =============================================================================
+#  A user poses a decision ("Should we migrate to microservices?"). The
+#  Moderator (front-man agent) frames it, then delegates to a council of
+#  specialist advisors who each argue from a distinct lens. The Synthesizer
+#  weighs everything with a deterministic DecisionMatrix coded tool and returns
+#  a verdict + confidence.
+#
+#  neuro-san features showcased:
+#    * AAOSA-style hierarchical delegation (Moderator -> advisors -> Synthesizer)
+#    * Agents-as-tools (each advisor is a callable "tool" of the Moderator)
+#    * Coded tools (DecisionMatrix, BiasCheck, ArgumentLedger)
+#    * sly_data shared state (the argument ledger)
+#
+#  VERIFY-AGAINST-REPO #3
+#  ----------------------
+#  Field names here follow standard neuro-san conventions (llm_config,
+#  commondefs, tools[], function/parameters, instructions, command, class).
+#  Open ANY working sample in your cloned repo (e.g. registries/hello_world.hocon
+#  or music_nerd.hocon) and confirm three things match your version:
+#    (a) the coded-tool `class` path format below,
+#    (b) the top-agent instruction/aaosa boilerplate style,
+#    (c) the llm_config model key for your provider.
+#  Adjust only those; the structure and agent design stay identical.
+# =============================================================================
+{
+    # -- LLM selection --------------------------------------------------------
+    # Switch provider by changing model_name. The API key is read from the
+    # environment (OPENAI_API_KEY / ANTHROPIC_API_KEY / MISTRAL_API_KEY).
+    #   OpenAI    : "gpt-4o"
+    #   Anthropic : "claude-3-5-sonnet-latest"
+    #   Mistral   : "mistral-large-latest"   <-- hackathon default
+    "llm_config": {
+        "model_name": "mistral-large-latest",
+    },
+
+    # -- Reusable instruction fragments --------------------------------------
+    "commondefs": {
+        "replacement_strings": {
+            "council_charter": """
+You are a member of QUORUM, a deliberation council. Argue rigorously but
+concisely (3-5 sentences). Stay strictly within your assigned lens. Be
+concrete and reference the user's actual decision. Do not hedge into
+neutrality \u2014 your job is to represent your perspective well so the
+Synthesizer can weigh a genuine range of views.
+"""
+        }
+    },
+
+    "tools": [
+
+        # ---------------------------------------------------------------------
+        #  MODERATOR  \u2014  front-man / entry point
+        # ---------------------------------------------------------------------
+        {
+            "name": "Moderator",
+            "function": {
+                "description": "Chairs the Quorum council. Receives the user's decision, frames it, gathers advisor positions, and asks the Synthesizer for a verdict."
+            },
+            "instructions": """
+You are the MODERATOR of the Quorum deliberation council.
+
+Process, in order:
+1. Restate the user's decision in one crisp sentence and identify the concrete
+   OPTIONS being weighed (usually "do it" vs "don't", or a small set of choices).
+2. Consult each advisor by calling them as tools, passing the framed decision:
+   Advocate, Skeptic, DomainAnalyst, Ethicist. Give each the same context.
+3. After gathering positions, call Synthesizer with the full set of positions
+   and ask for a weighted verdict.
+4. Present the final answer to the user: the verdict, the confidence, the
+   single strongest argument for and against, and the top risk to watch.
+
+Be efficient. Do not answer the decision yourself \u2014 you orchestrate the council.
+""",
+            "tools": ["Advocate", "Skeptic", "DomainAnalyst", "Ethicist", "Synthesizer"],
+        },
+
+        # ---------------------------------------------------------------------
+        #  ADVISORS  (each is a callable agent-tool)
+        # ---------------------------------------------------------------------
+        {
+            "name": "Advocate",
+            "function": {
+                "description": "Argues the strongest good-faith case FOR the decision / most ambitious option.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "decision": {"type": "string", "description": "The framed decision and options."}
+                    },
+                    "required": ["decision"],
+                },
+            },
+            "instructions": """
+{council_charter}
+Your lens: THE ADVOCATE. Make the most compelling, evidence-minded case FOR
+acting / for the boldest reasonable option. Surface upside, opportunity cost of
+inaction, and momentum. End with one line: "Advocate stance: <for/strongly-for>".
+""",
+            "command": "Argue in favour of the decision below.",
+        },
+        {
+            "name": "Skeptic",
+            "function": {
+                "description": "Argues the strongest case AGAINST, and scans the debate for cognitive bias.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "decision": {"type": "string", "description": "The framed decision and options."}
+                    },
+                    "required": ["decision"],
+                },
+            },
+            "instructions": """
+{council_charter}
+Your lens: THE SKEPTIC / devil's advocate. Make the strongest case AGAINST, name
+the failure modes, and hidden costs. You MUST also call the BiasCheck tool on the
+decision text and report any flags it returns. End with:
+"Skeptic stance: <against/strongly-against>".
+""",
+            "command": "Argue against the decision below and run a bias check.",
+            "tools": ["BiasCheck"],
+        },
+        {
+            "name": "DomainAnalyst",
+            "function": {
+                "description": "Provides grounded, factual/technical analysis and a first-pass criteria scoring.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "decision": {"type": "string", "description": "The framed decision and options."}
+                    },
+                    "required": ["decision"],
+                },
+            },
+            "instructions": """
+{council_charter}
+Your lens: THE DOMAIN ANALYST. Provide sober, factual analysis: feasibility,
+dependencies, second-order effects, and what evidence would change the answer.
+Before giving your analysis, call the Researcher tool to gather evidence.
+Propose 3-4 decision CRITERIA (e.g. Impact, Cost, Risk, Reversibility) that the
+Synthesizer should score against. End with: "Analyst suggested criteria: [...]".
+""",
+            "command": "Analyse the decision below and propose scoring criteria.",
+            "tools": ["Researcher"],
+        },
+        {
+            "name": "Researcher",
+            "function": {
+                "description": "Searches for evidence, data, and expert opinions relevant to the decision.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "decision": {"type": "string", "description": "The decision to research."}
+                    },
+                    "required": ["decision"],
+                },
+            },
+            "instructions": """
+{council_charter}
+Your lens: THE RESEARCHER. You gather external evidence for the DomainAnalyst.
+1. Formulate 1-2 concise search queries from the decision.
+2. Call the WebSearch tool with each query.
+3. Summarise the most relevant findings in 3-5 bullet points with source
+   attribution. Do NOT give opinions — report evidence only.
+""",
+            "command": "Research evidence for the decision below.",
+            "tools": ["WebSearch"],
+        },
+        {
+            "name": "Ethicist",
+            "function": {
+                "description": "Surfaces ethical, human, and long-horizon considerations.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "decision": {"type": "string", "description": "The framed decision and options."}
+                    },
+                    "required": ["decision"],
+                },
+            },
+            "instructions": """
+{council_charter}
+Your lens: THE ETHICIST. Consider who is affected, fairness, consent,
+reversibility, and long-horizon consequences the others may overlook. Flag any
+red lines. End with: "Ethicist stance: <supportive/cautious/opposed>".
+""",
+            "command": "Give the ethical and human-impact view on the decision below.",
+        },
+
+        # ---------------------------------------------------------------------
+        #  SYNTHESIZER  \u2014  weighs everything into a verdict
+        # ---------------------------------------------------------------------
+        {
+            "name": "Synthesizer",
+            "function": {
+                "description": "Weighs all advisor positions into a final verdict using the DecisionMatrix tool.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "positions": {"type": "string", "description": "Concatenated advisor positions and the framed decision."}
+                    },
+                    "required": ["positions"],
+                },
+            },
+            "instructions": """
+{council_charter}
+Your lens: THE SYNTHESIZER. Do NOT invent a numeric score in your head.
+1. Derive the options and 3-4 criteria (with integer weights 1-5) from the
+   advisor input.
+2. Assign each option a 0-10 score per criterion, justified in one clause each.
+3. Call the DecisionMatrix tool with options/criteria/weights/scores to get the
+   ranking, winner, and confidence.
+4. Return a clear verdict: the recommended option, the confidence figure from
+   the tool, the decisive criterion, and one guardrail. Keep it tight.
+""",
+            "command": "Produce the weighted verdict from the positions below.",
+            "tools": ["DecisionMatrix"],
+        },
+
+        # ---------------------------------------------------------------------
+        #  CODED TOOLS  (Python classes under coded_tools/quorum/)
+        # ---------------------------------------------------------------------
+        {
+            "name": "DecisionMatrix",
+            "function": {
+                "description": "Computes a weighted multi-criteria decision score, ranking, and confidence.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "options": {"type": "array", "items": {"type": "string"}},
+                        "criteria": {"type": "array", "items": {"type": "string"}},
+                        "weights": {"type": "object", "description": "criterion -> integer weight (1-5)"},
+                        "scores": {"type": "object", "description": "option -> {criterion -> 0..10}"}
+                    },
+                    "required": ["options", "criteria", "scores"],
+                },
+            },
+            # class path is <tool_module>.<ClassName>; module lives under
+            # coded_tools/quorum/. See VERIFY-AGAINST-REPO #3.
+            "class": "decision_matrix.DecisionMatrix",
+        },
+        {
+            "name": "BiasCheck",
+            "function": {
+                "description": "Scans argument text for common cognitive-bias markers.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "description": "The argument text to scan."}
+                    },
+                    "required": ["text"],
+                },
+            },
+            "class": "bias_check.BiasCheck",
+        },
+        {
+            "name": "ArgumentLedger",
+            "function": {
+                "description": "Records or lists advisor positions in shared sly_data.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["add", "list"]},
+                        "role": {"type": "string"},
+                        "stance": {"type": "string"},
+                        "point": {"type": "string"}
+                    },
+                    "required": ["action"],
+                },
+            },
+            "class": "argument_ledger.ArgumentLedger",
+        },
+        {
+            "name": "WebSearch",
+            "function": {
+                "description": "Searches the web for evidence relevant to a query. Returns titles, snippets, and URLs.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The search query."}
+                    },
+                    "required": ["query"],
+                },
+            },
+            "class": "web_search.WebSearch",
+        },
+    ],
+}
