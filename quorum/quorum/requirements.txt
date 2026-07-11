@@ -1,0 +1,20 @@
+# =============================================================================
+#  Quorum - Python dependencies
+#  Install:  pip install -r requirements.txt
+# =============================================================================
+
+# --- Backend + middleware (required to run `python main.py`) ---
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29
+pydantic>=2.6,<3.0
+python-dotenv>=1.0
+
+# --- neuro-san: the multi-agent framework being evaluated ---
+# Required for BACKEND_MODE=live and for running the agent network in
+# neuro-san-studio. IMPORTANT: pin this to the exact version used by the
+# hackathon branch you cloned (check that repo's requirements.txt) so the
+# HOCON schema and client API match. Left unpinned here intentionally.
+neuro-san
+
+# --- Optional: only needed if you switch live mode to the HTTP transport ---
+httpx>=0.27

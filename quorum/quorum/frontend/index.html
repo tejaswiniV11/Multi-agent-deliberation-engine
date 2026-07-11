@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Quorum — a multi-agent deliberation engine. Put a hard decision before a council of AI advisors who argue from multiple lenses and return a transparent, code-computed verdict." />
+  <title>Quorum · multi-agent deliberation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="masthead">
+    <div class="wordmark">
+      <span class="eyebrow">multi-agent deliberation</span>
+      <h1>QUORUM</h1>
+    </div>
+    <div class="mode-pill" id="modePill" title="backend mode">
+      <span class="dot"></span><span id="modeText">connecting</span>
+    </div>
+  </header>
+
+  <main class="stage">
+    <!-- SIGNATURE: the council semicircle + verdict gauge -->
+    <section class="chamber" aria-label="The council">
+      <svg id="council" viewBox="0 0 460 320" role="img" aria-label="Council of seven advisors">
+        <defs>
+          <radialGradient id="floorGlow" cx="50%" cy="90%" r="70%">
+            <stop offset="0%" stop-color="rgba(212,175,55,0.14)" />
+            <stop offset="100%" stop-color="rgba(212,175,55,0)" />
+          </radialGradient>
+        </defs>
+        <ellipse cx="230" cy="270" rx="200" ry="46" fill="url(#floorGlow)" />
+        <!-- verdict gauge lives in the centre; seats injected by JS -->
+        <g id="gauge" transform="translate(230,150)">
+          <circle class="gauge-track" r="58" />
+          <circle class="gauge-fill" id="gaugeFill" r="58" />
+          <text class="gauge-value" id="gaugeValue" y="-2">--</text>
+          <text class="gauge-label" id="gaugeLabel" y="20">awaiting verdict</text>
+        </g>
+        <g id="seats"></g>
+      </svg>
+
+      <div class="verdict-card" id="verdictCard" hidden>
+        <div class="verdict-head">
+          <span class="eyebrow">verdict</span>
+          <h2 id="verdictWinner">—</h2>
+        </div>
+        <div class="matrix" id="matrix"></div>
+        <div class="flags" id="flags"></div>
+      </div>
+    </section>
+
+    <!-- Transcript + input -->
+    <section class="transcript-wrap" aria-label="Deliberation transcript">
+      <div class="transcript" id="transcript">
+        <div class="empty" id="emptyState">
+          <p class="lead">Put a hard decision before the council.</p>
+          <p class="sub">Seven advisors argue from multiple lenses; a Synthesizer weighs them with a transparent decision matrix and returns a verdict with a confidence figure.</p>
+          <div class="samples" id="samples"></div>
+        </div>
+      </div>
+
+      <form class="composer" id="composer">
+        <div class="inputs">
+          <textarea id="decision" rows="1" placeholder="e.g. Should our team migrate the monolith to microservices this quarter?" required></textarea>
+          <textarea id="context" rows="1" placeholder="Context, constraints, success metric, or risk tolerance (optional)"></textarea>
+
+          <!-- Criteria weights panel -->
+          <details class="weights-panel" id="weightsPanel">
+            <summary class="weights-toggle">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+              Tune criteria weights
+            </summary>
+            <div class="weights-grid" id="weightsGrid">
+              <label class="weight-row">
+                <span class="weight-name">Impact</span>
+                <input type="range" class="weight-slider" data-criterion="Impact" min="1" max="5" value="5" />
+                <span class="weight-val" data-for="Impact">5</span>
+              </label>
+              <label class="weight-row">
+                <span class="weight-name">Cost</span>
+                <input type="range" class="weight-slider" data-criterion="Cost" min="1" max="5" value="3" />
+                <span class="weight-val" data-for="Cost">3</span>
+              </label>
+              <label class="weight-row">
+                <span class="weight-name">Risk</span>
+                <input type="range" class="weight-slider" data-criterion="Risk" min="1" max="5" value="4" />
+                <span class="weight-val" data-for="Risk">4</span>
+              </label>
+              <label class="weight-row">
+                <span class="weight-name">Reversibility</span>
+                <input type="range" class="weight-slider" data-criterion="Reversibility" min="1" max="5" value="2" />
+                <span class="weight-val" data-for="Reversibility">2</span>
+              </label>
+            </div>
+          </details>
+        </div>
+        <button type="submit" id="askBtn">Convene</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

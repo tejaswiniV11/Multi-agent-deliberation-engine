@@ -1,0 +1,14 @@
+# neuro-san agent-network registry manifest.
+#
+# Lists which .hocon networks the server should load and expose. A value of
+# `true` enables the network. Drop this file (and quorum.hocon) into the
+# `registries/` folder of your neuro-san-studio checkout.
+#
+# VERIFY-AGAINST-REPO #2
+# ----------------------
+# Some neuro-san-studio versions ship a single top-level `manifest.hocon`.
+# If yours already has one, DON'T overwrite it \u2014 just add the single line
+# `"quorum.hocon": true,` into its existing map.
+{
+    "quorum.hocon": true,
+}
